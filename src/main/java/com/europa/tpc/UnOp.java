@@ -1,5 +1,7 @@
 package com.europa.tpc;
 
+import com.google.gson.Gson;
+
 public class UnOp implements Ast
 {
     private int _value;
@@ -19,5 +21,22 @@ public class UnOp implements Ast
     public int n()
     {
         return _value;
+    }
+
+    @Override
+    public String toString()
+    {
+        return new Gson().toJson(this);
+    }
+
+    @Override
+    public boolean equals(Object other)
+    {
+        if (other == null || other.getClass() != getClass())
+            return false;
+        if (other == this)
+            return true;
+
+        return toString().equals(other.toString());
     }
 }

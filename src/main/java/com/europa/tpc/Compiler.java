@@ -8,12 +8,24 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.function.*;
 
 
 public class Compiler 
 {
   private final Parser _parser = new Parser();
   private final Assembler _assembler = new Assembler();
+  private static final Map<String, BiFunction<Integer, Integer, Integer>> _evalFuncs = new HashMap<String, BiFunction<Integer, Integer, Integer>>()
+  {
+    private static final long serialVersionUID = 1L;
+
+    {
+      put("+", (x,y) -> x + y);
+      put("-", (x,y) -> x - y);
+      put("*", (x,y) -> x * y);
+      put("/", (x,y) -> x / y);
+    }
+  };
 
   public List<String> compile(String prog) 
   {
@@ -46,28 +58,8 @@ public class Compiler
     {
       int va = ((UnOp)a).n();
       int vb = ((UnOp)b).n();
-      int value = 0;
 
-      switch (binop.op())
-      {
-        case "+":
-          value = va + vb;
-          break;
-
-          case "-":
-            value = va - vb;
-            break;
-
-          case "*":
-            value = va * vb;
-            break;
-
-          case "/":
-            value = va / vb;
-            break;
-      }
-
-      return new UnOp("imm", value);
+      return new UnOp("imm", _evalFuncs.get(binop.op()).apply(va, vb));
     }
 
     return new BinOp(binop.op(), a, b);
@@ -78,7 +70,7 @@ public class Compiler
    */
   public List<String> pass3(Ast ast) 
   {
-    return _assembler.GenerateInstructions(ast);
+    return _assembler.generateInstructions(ast);
   }
 
   private static Deque<String> tokenize(String prog) 
@@ -88,9 +80,7 @@ public class Compiler
     Matcher m = pattern.matcher(prog);
 
     while (m.find())
-    { 
       tokens.add(m.group());
-    }
     
     tokens.add("$"); // end-of-stream
     return tokens;
@@ -114,20 +104,22 @@ class Parser
         token = _tokens.pop();
       }
 
-      Ast ast = ParseDef();
+      Ast ast = ParseExpr();
       _tokens.pop(); // $
 
       return ast;
   }
 
-  private Ast ParseDef()
+  private Ast ParseExpr()
   {
     Ast ast = ParseTerm();
-    String token = _tokens.pop();
+    String token = _tokens.peek();
     
     while (token.equals("+") || token.equals("-"))
     {
+      _tokens.pop();
       ast = new BinOp(token, ast, ParseTerm());
+      token = _tokens.peek();
     }
 
     return ast;
@@ -136,11 +128,13 @@ class Parser
   private Ast ParseTerm()
   {
     Ast ast = ParseFactor();
-    String token = _tokens.pop();
+    String token = _tokens.peek();
 
     while (token.equals("*") || token.equals("/"))
     {
+      _tokens.pop();
       ast = new BinOp(token, ast, ParseFactor());
+      token = _tokens.peek();
     }
 
     return ast;
@@ -161,9 +155,8 @@ class Parser
         return new UnOp("imm", value);
 
       case LParen:
-        _tokens.pop();
-        Ast ast = ParseTerm();
-        _tokens.pop();
+        Ast ast = ParseExpr();
+        _tokens.pop(); // ')'
         return ast;
     }
 
@@ -205,7 +198,7 @@ class Assembler
         _mapOpToInstr.put("/", "DI");
     }
 
-    public List<String> GenerateInstructions(Ast ast)
+    public List<String> generateInstructions(Ast ast)
     {
         if (ast.getClass() == UnOp.class)
             return generate((UnOp)ast);
@@ -222,6 +215,8 @@ class Assembler
         else
             result.add(String.format("AR %d", unop.n()));
 
+          result.add("PU");
+
         return result;
     }
 
@@ -229,14 +224,13 @@ class Assembler
     {
         List<String> result = new ArrayList<String>();
 
-        result.addAll(GenerateInstructions(binop.a()));
-        result.addAll(GenerateInstructions(binop.b()));
-
-        result.add("PO"); // R0 = b
-        result.add("SW"); // R1 = b
-        result.add("PO"); // R0 = a
-        result.add(_mapOpToInstr.get(binop.op())); // R0 = R0 op R1
-        result.add("PU"); // push R0 to stack
+        result.addAll(generateInstructions(binop.a()));
+        result.addAll(generateInstructions(binop.b()));
+        result.add("PO");
+        result.add("SW");
+        result.add("PO");
+        result.add(_mapOpToInstr.get(binop.op()));
+        result.add("PU");
 
         return result;
     }

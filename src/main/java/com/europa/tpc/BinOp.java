@@ -1,5 +1,7 @@
 package com.europa.tpc;
 
+import com.google.gson.Gson;
+
 public class BinOp implements Ast
 {
     private String _operator;
@@ -8,6 +10,7 @@ public class BinOp implements Ast
 
     public BinOp(String operator, Ast a, Ast b)
     {
+        _operator = operator;
         _a = a;
         _b = b;
     }
@@ -25,5 +28,22 @@ public class BinOp implements Ast
     public Ast b()
     {
         return _b;
+    }
+
+    @Override
+    public String toString()
+    {
+        return new Gson().toJson(this);
+    }
+
+    @Override
+    public boolean equals(Object other)
+    {
+        if (other == null || other.getClass() != getClass())
+            return false;
+        if (other == this)
+            return true;
+
+        return toString().equals(other.toString());
     }
 }
